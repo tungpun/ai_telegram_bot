@@ -1,9 +1,9 @@
-available_text_models: ["gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-4-1106-preview", "gpt-4-vision-preview", "gpt-4", "text-davinci-003", "gpt-4o"]
+available_text_models: ["gpt-3.5-turbo", "gpt-4o", "claude-3-5-sonnet-latest", "claude-3-5-haiku-latest"]
 
 info:
   gpt-3.5-turbo:
     type: chat_completion
-    name: ChatGPT
+    name: gpt-3.5-turbo
     description: ChatGPT is that well-known model. It's <b>fast</b> and <b>cheap</b>. Ideal for everyday tasks. If there are some tasks it can't handle, try the <b>GPT-4</b>.
 
     price_per_1000_input_tokens: 0.0015
@@ -65,6 +65,7 @@ info:
       smart: 5
       fast: 4
       cheap: 3
+
   gpt-4o:
     type: chat_completion
     name: GPT-4o
@@ -92,9 +93,35 @@ info:
       Cheap: 3
 
   dalle-2:
-     type: image
-     price_per_1_image: 0.018  # 512x512
+    type: image
+    price_per_1_image: 0.018  # 512x512
 
   whisper:
     type: audio
     price_per_1_min: 0.006
+
+  claude-3-5-sonnet-latest:
+    type: chat_completion
+    name: claude-3-5-sonnet
+    description: claude-3-5-sonnet-latest (preview)
+
+    price_per_1000_input_tokens: 0.003
+    price_per_1000_output_tokens: 0.015
+
+    scores:
+      smart: 5
+      fast: 2
+      cheap: 2
+
+  claude-3-5-haiku-latest:
+    type: chat_completion
+    name: claude-3-5-haiku
+    description: claude-3-5-haiku-latest (preview)
+
+    price_per_1000_input_tokens: 0.0008
+    price_per_1000_output_tokens: 0.004
+
+    scores:
+      Smart: 3
+      Fast: 5
+      Cheap: 5
