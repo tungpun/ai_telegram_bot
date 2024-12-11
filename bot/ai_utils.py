@@ -4,6 +4,9 @@ import config
 import logging
 
 import tiktoken
+
+from klog import *
+
 import openai
 
 
@@ -11,8 +14,6 @@ import openai
 openai.api_key = config.openai_api_key
 if config.openai_api_base is not None:
     openai.api_base = config.openai_api_base
-logger = logging.getLogger(__name__)
-
 
 OPENAI_COMPLETION_OPTIONS = {
     "temperature": 0.7,
@@ -23,10 +24,15 @@ OPENAI_COMPLETION_OPTIONS = {
     "request_timeout": 60.0,
 }
 
+from anthropic import AsyncAnthropic
+anthropic_client = AsyncAnthropic(
+    api_key=config.anthropic_api_key
+)
+
 
 class ChatGPT:
     def __init__(self, model="gpt-3.5-turbo"):
-        assert model in {"text-davinci-003", "gpt-3.5-turbo-16k", "gpt-3.5-turbo", "gpt-4", "gpt-4o", "gpt-4-1106-preview", "gpt-4-vision-preview"}, f"Unknown model: {model}"
+        assert model in {"text-davinci-003", "gpt-3.5-turbo-16k", "gpt-3.5-turbo", "gpt-4", "gpt-4o", "gpt-4-1106-preview", "gpt-4-vision-preview", "claude-3-5-sonnet-latest", "claude-3-5-haiku-latest"}, f"Unknown model: {model}"
         self.model = model
 
     async def send_message(self, message, dialog_messages=[], chat_mode="assistant"):
@@ -69,6 +75,19 @@ class ChatGPT:
         n_first_dialog_messages_removed = n_dialog_messages_before - len(dialog_messages)
 
         return answer, (n_input_tokens, n_output_tokens), n_first_dialog_messages_removed
+
+
+    async def conv_openai_to_anthropic_messages(self, openai_messages):
+        anthropic_messages = []
+        system_anthropic_message = ""
+        for message in openai_messages:
+            if message["role"] == "user":
+                anthropic_messages.append({"role": "user", "content": message["content"]})
+            if message["role"] == "system":
+                system_anthropic_message = message["content"]
+            
+        return system_anthropic_message, anthropic_messages
+
 
     async def send_message_stream(self, message, dialog_messages=[], chat_mode="assistant"):
         if chat_mode not in config.chat_modes.keys():
@@ -115,6 +134,29 @@ class ChatGPT:
                         n_input_tokens, n_output_tokens = self._count_tokens_from_prompt(prompt, answer, model=self.model)
                         n_first_dialog_messages_removed = n_dialog_messages_before - len(dialog_messages)
                         yield "not_finished", answer, (n_input_tokens, n_output_tokens), n_first_dialog_messages_removed
+
+                elif self.model in {"claude-3-5-sonnet-latest", "claude-3-5-haiku-latest"}:
+                    messages = self._generate_prompt_messages(message, dialog_messages, chat_mode)
+                    system_message, messages = await self.conv_openai_to_anthropic_messages(messages)
+                    async with anthropic_client.messages.stream(
+                        max_tokens=1024,
+                        system=system_message,
+                        messages=messages,
+                        model="claude-3-5-haiku-20241022",
+                    ) as stream:
+                        str_answer = ""
+                        async for text in stream.text_stream:
+                            
+                            str_answer += text
+                            n_input_tokens, n_output_tokens = self._count_tokens_from_messages(messages, str_answer, model=self.model)
+                            n_first_dialog_messages_removed = 0
+
+                            yield "not_finished", str_answer, (n_input_tokens, n_output_tokens), n_first_dialog_messages_removed
+
+                        message = await stream.get_final_message()
+                        await stream.close()
+                        
+                        answer = message.content[0].text        # final message
 
                 answer = self._postprocess_answer(answer)
 
@@ -290,6 +332,10 @@ class ChatGPT:
         return answer
 
     def _count_tokens_from_messages(self, messages, answer, model="gpt-3.5-turbo"):
+        if "claude" in model:
+            return 0, 0
+        #TODO not ready for this
+
         encoding = tiktoken.encoding_for_model(model)
 
         if model == "gpt-3.5-turbo-16k":
